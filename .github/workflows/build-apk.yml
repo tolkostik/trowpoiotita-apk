@@ -1,0 +1,94 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  tropos1:
+    name: Τρόπος 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Δικαιώματα φακέλου
+        run: chmod -R 777 .
+
+      - name: Δημιουργία APK
+        shell: bash
+        run: |
+          set -o pipefail
+          docker run --rm \
+            -e PIP_CONSTRAINT=/home/user/hostcwd/constraints.txt \
+            -v "$PWD/pip.conf":/etc/pip.conf:ro \
+            -v "$PWD":/home/user/hostcwd \
+            kivy/buildozer android debug 2>&1 | tee build-log.txt
+
+      - name: Αποθήκευση APK
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: Poiotita-APK-1
+          path: bin/*.apk
+
+      - name: Αποθήκευση αναφοράς
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-log-1
+          path: build-log.txt
+
+  tropos2:
+    name: Τρόπος 2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Πακέτα συστήματος
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip autoconf automake libtool libltdl-dev \
+            pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+
+      - name: Buildozer
+        run: pip install "buildozer==1.5.0" "cython==0.29.36" setuptools
+
+      - name: Ρυθμίσεις σταθερής έκδοσης
+        run: |
+          sed -i 's/kivy==2.3.1/kivy==2.3.0/' buildozer.spec
+          sed -i '/^\[app\]/a p4a.branch = v2024.01.21' buildozer.spec
+          cat buildozer.spec
+
+      - name: Δημιουργία APK
+        shell: bash
+        env:
+          PIP_CONSTRAINT: ${{ github.workspace }}/constraints.txt
+        run: |
+          set -o pipefail
+          buildozer android debug 2>&1 | tee build-log.txt
+
+      - name: Αποθήκευση APK
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: Poiotita-APK-2
+          path: bin/*.apk
+
+      - name: Αποθήκευση αναφοράς
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-log-2
+          path: build-log.txt
